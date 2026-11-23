@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stationeers Control Deck</title>
+<style>
+  :root {
+    --bg: #0b0e11;
+    --panel: #13191e;
+    --panel2: #182127;
+    --line: #25313a;
+    --text: #e3eaef;
+    --muted: #8496a4;
+    --amber: #ffa02e;
+    --amber-dim: #a4631a;
+    --teal: #38d6c0;
+    --red: #ff6262;
+    --green: #63e08a;
+    --mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+    --sans: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1100px 500px at 85% -10%, rgba(255,160,46,.09), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(56,214,192,.07), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.45;
+    min-height: 100vh;
+  }
+  a { color: var(--teal); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button, input, select { font: inherit; }
+  code, .mono { font-family: var(--mono); }
+
+  header {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 18px 26px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(10,13,16,.82);
+    backdrop-filter: blur(8px);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .brand { display: flex; align-items: baseline; gap: 12px; }
+  .brand h1 {
+    margin: 0; font-family: var(--mono); font-size: 20px; letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .brand h1 span { color: var(--amber); }
+  .brand small { color: var(--muted); letter-spacing: 3px; font-size: 10px; text-transform: uppercase; }
+  .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 13px; font-family: var(--mono); font-size: 11px;
+    letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
+    background: #0d1216;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 8px rgba(255,255,255,.15); }
+  .pill.online { color: var(--green); border-color: rgba(99,224,138,.35); }
+  .pill.online .dot { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .pill.offline { color: var(--red); border-color: rgba(255,98,98,.35); }
+  .pill.offline .dot { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .pill.busy { color: var(--amber); border-color: rgba(255,160,46,.35); }
+  .pill.busy .dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .head-link { font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+  .head-link:hover { color: var(--amber); }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 26px 60px; }
+
+  .banner {
+    display: none; border: 1px solid rgba(255,160,46,.35); background: rgba(255,160,46,.07);
+    color: #ffd8a6; border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;
+    display: none; align-items: flex-start; gap: 14px; flex-wrap: wrap;
+  }
+  .banner.show { display: flex; }
+  .banner.error { border-color: rgba(255,98,98,.45); background: rgba(255,98,98,.07); color: #ffc7c7; }
+  .banner strong { color: var(--amber); font-family: var(--mono); letter-spacing: 1px; }
+  .banner.error strong { color: var(--red); }
+  .banner .msg { flex: 1; min-width: 240px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; align-items: start; }
+  .card {
+    background: linear-gradient(180deg, var(--panel2), var(--panel));
+    border: 1px solid var(--line); border-radius: 14px; padding: 20px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.25);
+  }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 {
+    margin: 0 0 14px; font-family: var(--mono); font-size: 12px; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 10px;
+  }
+  .card h2::before { content: ""; width: 6px; height: 6px; background: var(--amber); display: inline-block; transform: rotate(45deg); }
+  .card h2 .right { margin-left: auto; letter-spacing: 0; font-size: 11px; color: var(--muted); }
+
+  .big-status { font-family: var(--mono); font-size: 28px; letter-spacing: 2px; text-transform: uppercase; margin: 2px 0 4px; }
+  .big-status.online { color: var(--green); }
+  .big-status.offline { color: var(--red); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 7px 12px; margin: 14px 0; font-size: 14px; }
+  .kv dt { color: var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding-top: 2px; }
+  .kv dd { margin: 0; word-break: break-word; }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  button {
+    cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: #1b252c; color: var(--text); padding: 9px 15px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+    transition: border-color .15s, background .15s, color .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--amber-dim); background: #202c34; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--amber); border-color: var(--amber); color: #1a1206; font-weight: 700; }
+  button.primary:hover:not(:disabled) { background: #ffb455; border-color: #ffb455; }
+  button.danger { color: #ffb3b3; border-color: rgba(255,98,98,.35); }
+  button.danger:hover:not(:disabled) { background: rgba(255,98,98,.12); border-color: var(--red); }
+  button.ghost { background: transparent; }
+  button.tiny { padding: 5px 9px; font-size: 10px; letter-spacing: .5px; }
+
+  .address {
+    display: flex; align-items: center; gap: 10px; margin-top: 10px;
+    background: #0d1216; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    font-family: var(--mono); font-size: 13px;
+  }
+  .address span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+
+  .bar { height: 6px; background: #0d1216; border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--teal), var(--amber)); width: 0; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 11px 10px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
+  th { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 400; }
+  tbody tr:hover { background: rgba(255,255,255,.02); }
+  .name-cell { font-family: var(--mono); font-size: 13px; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-family: var(--mono);
+    font-size: 9px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid var(--line); color: var(--muted);
+  }
+  .badge.active { color: var(--amber); border-color: rgba(255,160,46,.45); background: rgba(255,160,46,.08); }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .empty { color: var(--muted); padding: 18px 4px; font-size: 14px; }
+
+  label.field { display: block; margin-bottom: 12px; }
+  label.field > span { display: block; color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 6px; }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; padding: 9px 11px; border-radius: 8px;
+    border: 1px solid var(--line); background: #0d1216; color: var(--text);
+    font-family: var(--mono); font-size: 13px;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--amber-dim); }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
+  .check input { accent-color: var(--amber); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  @media (max-width: 560px) { .two-col { grid-template-columns: 1fr; } header { padding: 14px 16px; } main { padding: 16px; } }
+
+  .dropzone {
+    border: 1px dashed #34444f; border-radius: 10px; padding: 20px; text-align: center;
+    color: var(--muted); margin-bottom: 14px; transition: border-color .15s, background .15s;
+  }
+  .dropzone.hover { border-color: var(--amber); background: rgba(255,160,46,.05); }
+  .dropzone strong { color: var(--text); }
+  .upload-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .upload-row input[type=file] { color: var(--muted); font-size: 12px; max-width: 100%; }
+  .progress { display: none; height: 7px; background: #0d1216; border-radius: 999px; overflow: hidden; margin-top: 12px; }
+  .progress.show { display: block; }
+  .progress > i { display: block; height: 100%; width: 0; background: var(--amber); transition: width .15s; }
+
+  pre.logs {
+    margin: 0; height: 340px; overflow: auto; background: #080b0d; border: 1px solid var(--line);
+    border-radius: 10px; padding: 13px; font-family: var(--mono); font-size: 11.5px; line-height: 1.5;
+    color: #b9c7d1; white-space: pre-wrap; word-break: break-word;
+  }
+
+  .modal {
+    position: fixed; inset: 0; background: rgba(4,6,8,.82); display: none;
+    align-items: center; justify-content: center; padding: 20px; z-index: 50;
+  }
+  .modal.show { display: flex; }
+  .modal .box {
+    width: 100%; max-width: 420px; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 14px; padding: 24px; box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  }
+  .modal h3 { margin: 0 0 6px; font-family: var(--mono); letter-spacing: 2px; text-transform: uppercase; font-size: 15px; }
+  .modal p { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .modal .err { color: var(--red); font-size: 12px; min-height: 16px; margin-bottom: 8px; }
+
+  .toast {
+    position: fixed; right: 22px; bottom: 22px; z-index: 80; max-width: 420px;
+    background: #1a242b; border: 1px solid var(--line); border-left: 3px solid var(--teal);
+    color: var(--text); border-radius: 8px; padding: 12px 16px; font-size: 13px;
+    box-shadow: 0 16px 50px rgba(0,0,0,.5); opacity: 0; transform: translateY(10px);
+    transition: .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { border-left-color: var(--red); }
+  .player-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .player { background: #0d1216; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-family: var(--mono); font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Stationeers <span>// Control Deck</span></h1>
+    <small>dedicated server</small>
+  </div>
+  <div class="spacer"></div>
+  <div class="pill" id="statusPill"><i class="dot"></i><span id="statusText">Connecting</span></div>
+  <a class="head-link" id="ssuiLink" href="#" target="_blank" rel="noopener">SSUI &#8599;</a>
+  <a class="head-link" href="#" id="logoutLink">Log out</a>
+</header>
+
+<main>
+  <div class="banner" id="banner">
+    <strong id="bannerTitle">Waiting</strong>
+    <div class="msg" id="bannerMsg"></div>
+    <button class="tiny" id="retryBtn">Retry</button>
+    <button class="tiny" id="credsBtn">SSUI login</button>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Server <span class="right" id="branchLabel"></span></h2>
+      <div class="big-status offline" id="bigStatus">Offline</div>
+      <div class="muted small" id="statusDetail">Waiting for SSUI...</div>
+      <div class="address"><span id="gameAddress">...</span><button class="tiny" id="copyBtn">Copy</button></div>
+      <dl class="kv">
+        <dt>Uptime</dt><dd id="uptime">-</dd>
+        <dt>Players</dt><dd id="players">0</dd>
+        <dt>Save</dt><dd class="mono" id="activeSave">-</dd>
+        <dt>Disk free</dt><dd id="disk">-</dd>
+      </dl>
+      <div class="bar"><i id="diskBar"></i></div>
+      <div class="btn-row">
+        <button class="primary" id="startBtn">Start</button>
+        <button id="stopBtn">Stop</button>
+        <button id="restartBtn">Restart</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>New World</h2>
+      <p class="small muted" style="margin-top:-6px">Creates a fresh save folder and optionally launches it.</p>
+      <label class="field"><span>Save name</span><input type="text" id="newName" placeholder="EuropaBase" autocomplete="off"></label>
+      <label class="field"><span>World</span><select id="worldSelect"><option value="Moon">Moon</option><option value="Mars">Mars</option><option value="Europa">Europa</option></select></label>
+      <div class="check"><input type="checkbox" id="newLaunch" checked><label for="newLaunch">Start server after creating</label></div>
+      <div class="btn-row"><button class="primary" id="createBtn">Create world</button></div>
+      <p class="small muted" id="worldHint" style="margin-bottom:0">World list loads from your game install when SSUI is ready.</p>
+    </section>
+
+    <section class="card wide">
+      <h2>Saves <span class="right" id="saveCount"></span></h2>
+      <div class="dropzone" id="dropzone">
+        <strong>Drop a save archive here</strong> or use the file picker. A save is a folder containing
+        <span class="mono">world.xml</span> and <span class="mono">world_meta.xml</span> &mdash; zip that folder.
+      </div>
+      <div class="upload-row">
+        <input type="file" id="fileInput" accept=".zip,.tar,.tar.gz,.tgz">
+        <input type="text" id="uploadName" placeholder="Save name (optional)" style="max-width:220px" autocomplete="off">
+        <label class="check" style="margin:0"><input type="checkbox" id="overwrite"> Overwrite</label>
+        <label class="check" style="margin:0"><input type="checkbox" id="uploadLaunch"> Launch after import</label>
+        <button class="primary" id="uploadBtn" disabled>Upload</button>
+      </div>
+      <div class="progress" id="progress"><i id="progressBar"></i></div>
+      <div style="overflow-x:auto;margin-top:16px">
+        <table>
+          <thead><tr><th>Save</th><th>Size</th><th>Modified</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody id="savesBody"><tr><td colspan="4" class="empty">Loading saves...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Server Settings</h2>
+      <form id="settingsForm">
+        <label class="field"><span>Server name</span><input type="text" id="setName" autocomplete="off"></label>
+        <div class="two-col">
+          <label class="field"><span>Max players</span><input type="number" id="setPlayers" min="1" max="64"></label>
+          <label class="field"><span>Save interval (s)</span><input type="number" id="setInterval" min="30" max="86400"></label>
+        </div>
+        <label class="field"><span>Server password (blank = open)</span><input type="text" id="setPassword" autocomplete="off"></label>
+        <div class="check"><input type="checkbox" id="setAutoSave"><label for="setAutoSave">Automatic saves</label></div>
+        <div class="check"><input type="checkbox" id="setAutoStart"><label for="setAutoStart">Start server when SSUI boots</label></div>
+        <div class="btn-row"><button class="primary" type="submit">Save settings</button></div>
+        <p class="small muted" style="margin-bottom:0">Password changes take effect on the next server start.</p>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Logs <span class="right"><a href="#" id="refreshLogs">refresh</a></span></h2>
+      <pre class="logs" id="logs">Loading...</pre>
+    </section>
+  </div>
+</main>
+
+<div class="modal" id="loginModal">
+  <div class="box">
+    <h3>Control Deck Login</h3>
+    <p>Sign in with the panel credentials from <span class="mono">/root/stationeers-credentials.txt</span>.</p>
+    <form id="loginForm">
+      <label class="field"><span>Username</span><input type="text" id="loginUser" value="admin" autocomplete="username"></label>
+      <label class="field"><span>Password</span><input type="password" id="loginPass" autocomplete="current-password"></label>
+      <div class="err" id="loginErr"></div>
+      <button class="primary" type="submit" style="width:100%">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="credsModal">
+  <div class="box">
+    <h3>SSUI Login</h3>
+    <p>Only needed if the panel cannot create or use its own SSUI owner token. These credentials are stored on this server.</p>
+    <form id="credsForm">
+      <label class="field"><span>SSUI username</span><input type="text" id="ssuiUser" value="admin" autocomplete="username"></label>
+      <label class="field"><span>SSUI password</span><input type="password" id="ssuiPass" autocomplete="current-password"></label>
+      <div class="err" id="credsErr"></div>
+      <button class="primary" type="submit" style="width:100%">Connect</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var state = null;
+  var pollTimer = null;
+  var logsTimer = null;
+  var uploading = false;
+  var settingsLoaded = false;
+
+  function $(id) { return document.getElementById(id); }
+
+  function api(path, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ "X-Requested-With": "stationeers-panel" }, opts.headers || {});
+    if (opts.json !== undefined) {
+      opts.body = JSON.stringify(opts.json);
+      opts.headers["Content-Type"] = "application/json";
+      delete opts.json;
+    }
+    return fetch(path, opts).then(function (res) {
+      if (res.status === 401) {
+        showModal("loginModal");
+        throw new Error("Please sign in");
+      }
+      return res.text().then(function (text) {
+        var body = {};
+        try { body = text ? JSON.parse(text) : {}; } catch (e) { body = { error: text }; }
+        if (!res.ok) { throw new Error(body.error || ("HTTP " + res.status)); }
+        return body;
+      });
+    });
+  }
+
+  function toast(message, isError) {
+    var el = $("toast");
+    el.textContent = message;
+    el.className = "toast show" + (isError ? " error" : "");
+    clearTimeout(el._timer);
+    el._timer = setTimeout(function () { el.className = "toast"; }, 4500);
+  }
+
+  function showModal(id) { $(id).classList.add("show"); }
+  function hideModal(id) { $(id).classList.remove("show"); }
+
+  function fmtDuration(seconds) {
+    seconds = Math.max(0, Math.floor(seconds || 0));
+    var d = Math.floor(seconds / 86400), h = Math.floor(seconds % 86400 / 3600);
+    var m = Math.floor(seconds % 3600 / 60), s = seconds % 60;
+    if (d) return d + "d " + h + "h";
+    if (h) return h + "h " + m + "m";
+    if (m) return m + "m " + s + "s";
+    return s + "s";
+  }
+
+  function esc(text) {
+    return String(text == null ? "" : text).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function setStatus(kind, label) {
+    var pill = $("statusPill");
+    pill.className = "pill " + kind;
+    $("statusText").textContent = label;
+  }
+
+  function render(s) {
+    state = s;
+    var running = !!(s.server && s.server.running);
+    var connected = !!s.connected;
+    var bootstrap = s.bootstrap || {};
+
+    if (!connected) {
+      setStatus(bootstrap.state === "waiting" ? "busy" : "offline", bootstrap.state === "waiting" ? "Waiting for SSUI" : "Disconnected");
+    } else if (running) {
+      setStatus("online", "Online");
+    } else {
+      setStatus("offline", "Stopped");
+    }
+
+    var banner = $("banner");
+    if (!connected) {
+      banner.classList.add("show");
+      banner.classList.toggle("error", bootstrap.state === "error");
+      $("bannerTitle").textContent = bootstrap.state === "waiting" ? "SSUI starting" : "SSUI offline";
+      $("bannerMsg").textContent = bootstrap.message || "Waiting for Stationeers Server UI...";
+    } else if (s.error) {
+      banner.classList.add("show", "error");
+      $("bannerTitle").textContent = "SSUI error";
+      $("bannerMsg").textContent = s.error;
+    } else {
+      banner.classList.remove("show", "error");
+    }
+
+    var big = $("bigStatus");
+    big.textContent = running ? "Online" : (connected ? "Stopped" : "Offline");
+    big.className = "big-status " + (running ? "online" : "offline");
+    $("statusDetail").textContent = running
+      ? ("Process state: " + (s.server.state || "running") + (s.server.startedAt ? " · since " + new Date(s.server.startedAt).toLocaleTimeString() : ""))
+      : (connected ? "Server is not running. Load a save and press Start." : (bootstrap.message || "Waiting for SSUI to finish its first-time install."));
+
+    var settings = s.settings || {};
+    var port = settings.gamePort || "27016";
+    $("gameAddress").textContent = location.hostname + ":" + port + " /udp";
+    $("uptime").textContent = running ? fmtDuration(s.server.uptimeSeconds) : "-";
+    $("activeSave").textContent = settings.saveName || "-";
+    $("branchLabel").textContent = settings.gameBranch ? settings.gameBranch.toUpperCase() : "";
+    $("ssuiLink").href = location.protocol + "//" + location.hostname + ":8443";
+
+    var players = s.players || [];
+    $("players").innerHTML = players.length
+      ? '<span class="player-list">' + players.map(function (p) {
+          var name = typeof p === "string" ? p : (p.username || p.name || "player");
+          return '<span class="player">' + esc(name) + "</span>";
+        }).join("") + "</span>"
+      : "0";
+
+    if (s.disk && s.disk.total) {
+      var usedPct = Math.round((1 - s.disk.free / s.disk.total) * 100);
+      $("diskBar").style.width = Math.max(2, usedPct) + "%";
+      $("disk").textContent = s.disk.freeText + " free of " + s.disk.totalText;
+    }
+
+    $("startBtn").disabled = !connected || running;
+    $("stopBtn").disabled = !connected || !running;
+    $("restartBtn").disabled = !connected || !running;
+    $("createBtn").disabled = !connected;
+
+    renderSaves(s.saves || []);
+    renderWorlds(s.worlds || []);
+    if (!settingsLoaded && connected) fillSettings(settings);
+  }
+
+  function renderSaves(saves) {
+    var body = $("savesBody");
+    $("saveCount").textContent = saves.length + (saves.length === 1 ? " save" : " saves");
+    if (!saves.length) {
+      body.innerHTML = '<tr><td colspan="4" class="empty">No save folders yet. Upload one above or create a new world.</td></tr>';
+      return;
+    }
+    body.innerHTML = saves.map(function (save) {
+      var actions = "";
+      actions += '<button class="tiny primary" data-action="launch" data-name="' + esc(save.name) + '">' + (save.active ? "Restart" : "Load &amp; launch") + "</button>";
+      if (!save.active) actions += '<button class="tiny" data-action="activate" data-name="' + esc(save.name) + '">Set active</button>';
+      actions += '<a href="/api/saves/' + encodeURIComponent(save.name) + '/download"><button class="tiny">Download</button></a>';
+      actions += '<button class="tiny" data-action="rename" data-name="' + esc(save.name) + '">Rename</button>';
+      actions += '<button class="tiny danger" data-action="delete" data-name="' + esc(save.name) + '">Delete</button>';
+      return "<tr>" +
+        '<td class="name-cell">' + esc(save.name) + (save.active ? ' <span class="badge active">active</span>' : "") + "</td>" +
+        "<td>" + esc(save.sizeText) + "</td>" +
+        "<td class=\"muted\">" + esc(save.modified) + "</td>" +
+        '<td><div class="row-actions">' + actions + "</div></td>" +
+      "</tr>";
+    }).join("");
+  }
+
+  function renderWorlds(worlds) {
+    var select = $("worldSelect");
+    if (!worlds.length) return;
+    var current = select.value;
+    select.innerHTML = worlds.map(function (w) {
+      return '<option value="' + esc(w.id) + '">' + esc(w.name) + "</option>";
+    }).join("");
+    var found = worlds.some(function (w) { return w.id === current; });
+    if (found) select.value = current;
+    $("worldHint").textContent = "World list loaded from your Stationeers install.";
+  }
+
+  function fillSettings(s) {
+    $("setName").value = s.serverName || "";
+    $("setPlayers").value = s.serverMaxPlayers || "8";
+    $("setInterval").value = s.saveInterval || "300";
+    $("setPassword").value = s.serverPassword || "";
+    $("setAutoSave").checked = !!s.autoSave;
+    $("setAutoStart").checked = !!s.autoStartServerOnStartup;
+    settingsLoaded = true;
+  }
+
+  function refresh() {
+    if (uploading) return;
+    api("/api/state").then(render).catch(function (err) {
+      if (err.message !== "Please sign in") {
+        setStatus("offline", "Disconnected");
+        toast(err.message, true);
+      }
+    });
+  }
+
+  function refreshLogs() {
+    api("/api/logs?lines=250").then(function (body) {
+      var pre = $("logs");
+      var atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
+      pre.textContent = body.logs || "(no output)";
+      if (atBottom) pre.scrollTop = pre.scrollHeight;
+    }).catch(function () {});
+  }
+
+  function runServer(action) {
+    var labels = { start: "Starting server...", stop: "Stopping server...", restart: "Restarting server..." };
+    toast(labels[action] || "Working...");
+    api("/api/server/" + action, { method: "POST", json: {} })
+      .then(function (body) { toast(body.message || "Done"); setTimeout(refresh, 1200); })
+      .catch(function (err) { toast(err.message, true); });
+  }
+
+  function loadSave(name) {
+    if (!confirm('Load "' + name + '" and start the server?')) return;
+    api("/api/saves/" + encodeURIComponent(name) + "/activate", { method: "POST", json: { launch: true } })
+      .then(function (body) { toast(body.message); setTimeout(refresh, 1500); })
+      .catch(function (err) { toast(err.message, true); });
+  }
+
+  function setActive(name) {
+    api("/api/saves/" + encodeURIComponent(name) + "/activate", { method: "POST", json: { launch: false } })
+      .then(function (body) { toast(body.message); refresh(); })
+      .catch(function (err) { toast(err.message, true); });
+  }
+
+  function renameSave(name) {
+    var next = prompt("New name for \"" + name + "\":", name);
+    if (!next || next === name) return;
+    api("/api/saves/" + encodeURIComponent(name) + "/rename", { method: "POST", json: { newName: next } })
+      .then(function () { toast("Renamed to " + next); refresh(); })
+      .catch(function (err) { toast(err.message, true); });
+  }
+
+  function deleteSave(name) {
+    if (!confirm('Delete "' + name + '" permanently? Download a copy first if you are unsure.')) return;
+    api("/api/saves/" + encodeURIComponent(name), { method: "DELETE" })
+      .then(function () { toast("Deleted " + name); refresh(); })
+      .catch(function (err) { toast(err.message, true); });
+  }
+
+  function uploadFile(file, name, overwrite, launch) {
+    if (!file) return;
+    uploading = true;
+    $("uploadBtn").disabled = true;
+    $("progress").classList.add("show");
+    $("progressBar").style.width = "0%";
+    var url = "/api/saves/upload?overwrite=" + (overwrite ? "1" : "0") + "&launch=" + (launch ? "1" : "0");
+    if (name) url += "&name=" + encodeURIComponent(name);
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("X-Requested-With", "stationeers-panel");
+    xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
+    xhr.upload.onprogress = function (ev) {
+      if (ev.lengthComputable) {
+        $("progressBar").style.width = Math.round(ev.loaded / ev.total * 100) + "%";
+      }
+    };
+    xhr.onload = function () {
+      uploading = false;
+      $("progress").classList.remove("show");
+      $("uploadBtn").disabled = false;
+      var body = {};
+      try { body = JSON.parse(xhr.responseText || "{}"); } catch (e) {}
+      if (xhr.status === 401) { showModal("loginModal"); return; }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        toast(body.message || "Save imported");
+        $("fileInput").value = "";
+        $("uploadName").value = "";
+        setTimeout(refresh, 1500);
+      } else {
+        toast(body.error || ("Upload failed (HTTP " + xhr.status + ")"), true);
+      }
+    };
+    xhr.onerror = function () {
+      uploading = false;
+      $("progress").classList.remove("show");
+      $("uploadBtn").disabled = false;
+      toast("Upload failed: connection error", true);
+    };
+    xhr.send(file);
+  }
+
+  // Events
+  $("startBtn").addEventListener("click", function () { runServer("start"); });
+  $("stopBtn").addEventListener("click", function () { runServer("stop"); });
+  $("restartBtn").addEventListener("click", function () { runServer("restart"); });
+  $("retryBtn").addEventListener("click", function () {
+    api("/api/ssui/retry", { method: "POST", json: {} }).then(function () { toast("Retrying SSUI connection"); setTimeout(refresh, 2000); }).catch(function (e) { toast(e.message, true); });
+  });
+  $("credsBtn").addEventListener("click", function () { showModal("credsModal"); });
+  $("copyBtn").addEventListener("click", function () {
+    var text = $("gameAddress").textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast("Copied " + text); });
+  });
+  $("refreshLogs").addEventListener("click", function (e) { e.preventDefault(); refreshLogs(); });
+  $("logoutLink").addEventListener("click", function (e) {
+    e.preventDefault();
+    fetch("/api/logout", { method: "POST", headers: { "X-Requested-With": "stationeers-panel" } }).finally(function () {
+      document.cookie = "stationeers_panel_session=; Max-Age=0; path=/";
+      location.reload();
+    });
+  });
+
+  $("savesBody").addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button[data-action]");
+    if (!btn) return;
+    var name = btn.getAttribute("data-name");
+    var action = btn.getAttribute("data-action");
+    if (action === "launch") loadSave(name);
+    else if (action === "activate") setActive(name);
+    else if (action === "rename") renameSave(name);
+    else if (action === "delete") deleteSave(name);
+  });
+
+  $("fileInput").addEventListener("change", function () {
+    $("uploadBtn").disabled = !this.files.length;
+  });
+  $("uploadBtn").addEventListener("click", function () {
+    var file = $("fileInput").files[0];
+    uploadFile(file, $("uploadName").value.trim(), $("overwrite").checked, $("uploadLaunch").checked);
+  });
+
+  var dz = $("dropzone");
+  ["dragenter", "dragover"].forEach(function (name) {
+    dz.addEventListener(name, function (e) { e.preventDefault(); dz.classList.add("hover"); });
+  });
+  ["dragleave", "drop"].forEach(function (name) {
+    dz.addEventListener(name, function (e) { e.preventDefault(); dz.classList.remove("hover"); });
+  });
+  dz.addEventListener("drop", function (e) {
+    var file = e.dataTransfer.files[0];
+    if (!file) return;
+    uploadFile(file, $("uploadName").value.trim(), $("overwrite").checked, $("uploadLaunch").checked);
+  });
+
+  $("createBtn").addEventListener("click", function () {
+    var name = $("newName").value.trim();
+    if (!name) { toast("Enter a save name", true); return; }
+    api("/api/worlds", { method: "POST", json: {
+      saveName: name,
+      worldId: $("worldSelect").value,
+      launch: $("newLaunch").checked
+    } }).then(function (body) {
+      toast(body.message);
+      $("newName").value = "";
+      setTimeout(refresh, 1500);
+    }).catch(function (err) { toast(err.message, true); });
+  });
+
+  $("settingsForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    api("/api/settings", { method: "POST", json: {
+      serverName: $("setName").value,
+      serverMaxPlayers: $("setPlayers").value,
+      serverPassword: $("setPassword").value,
+      saveInterval: $("setInterval").value,
+      autoSave: $("setAutoSave").checked,
+      autoStartServerOnStartup: $("setAutoStart").checked
+    } }).then(function () { toast("Settings saved"); refresh(); })
+      .catch(function (err) { toast(err.message, true); });
+  });
+
+  $("loginForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    $("loginErr").textContent = "";
+    fetch("/api/login", {
+      method: "POST",
+      headers: { "X-Requested-With": "stationeers-panel", "Content-Type": "application/json" },
+      body: JSON.stringify({ username: $("loginUser").value, password: $("loginPass").value })
+    }).then(function (res) {
+      return res.text().then(function (text) {
+        var body = {};
+        try { body = JSON.parse(text); } catch (err) {}
+        if (!res.ok) throw new Error(body.error || "Login failed");
+        hideModal("loginModal");
+        settingsLoaded = false;
+        $("loginPass").value = "";
+        startPolling();
+        refresh();
+      });
+    }).catch(function (err) { $("loginErr").textContent = err.message; });
+  });
+
+  $("credsForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    $("credsErr").textContent = "";
+    api("/api/ssui/credentials", { method: "POST", json: {
+      username: $("ssuiUser").value,
+      password: $("ssuiPass").value
+    } }).then(function () {
+      hideModal("credsModal");
+      toast("Connected to SSUI");
+      settingsLoaded = false;
+      refresh();
+    }).catch(function (err) { $("credsErr").textContent = err.message; });
+  });
+
+  document.querySelectorAll(".modal").forEach(function (modal) {
+    modal.addEventListener("click", function (e) { if (e.target === modal) modal.classList.remove("show"); });
+  });
+
+  function startPolling() {
+    clearInterval(pollTimer);
+    clearInterval(logsTimer);
+    pollTimer = setInterval(function () { if (!document.hidden) refresh(); }, 5000);
+    logsTimer = setInterval(function () { if (!document.hidden) refreshLogs(); }, 15000);
+  }
+
+  api("/api/state").then(function (s) {
+    if (s) { render(s); refreshLogs(); startPolling(); }
+  }).catch(function (err) {
+    if (err.message === "Please sign in") showModal("loginModal");
+    else { setStatus("offline", "Disconnected"); toast(err.message, true); startPolling(); }
+  });
+})();
+</script>
+</body>
+</html>
