@@ -20,14 +20,14 @@ from its official GitHub releases; SSUI is not redistributed here.
 On a Proxmox VE host:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/RoseOO/stationprox/main/stationeers.sh)"
-```
-
-Or download it first and run it (handy if you want to keep a copy):
-
-```bash
 curl -fsSL https://raw.githubusercontent.com/RoseOO/stationprox/main/stationeers.sh -o stationeers.sh
 bash stationeers.sh
+```
+
+One-liner (keeps stdin attached for the prompts):
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/RoseOO/stationprox/main/stationeers.sh)"
 ```
 
 Inside an existing Debian 13 container or VM:
