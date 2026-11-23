@@ -490,16 +490,79 @@ EOF
 
 configure_console_autologin() {
   msg_info "Enabling root auto-login on the container console"
-  local dropin="/etc/systemd/system/getty@tty1.service.d"
-  mkdir -p "$dropin"
-  cat > "$dropin/autologin.conf" <<'EOF'
+
+  # Console access is already root-only through Proxmox; match the
+  # community-scripts behaviour and drop the root password.
+  passwd -d root >/dev/null 2>&1 || true
+
+  local agetty_opts='--autologin root --noissue --keep-baud'
+  local container_unit="/usr/lib/systemd/system/container-getty@.service"
+  local console_unit="/usr/lib/systemd/system/console-getty.service"
+
+  # Remove the old tty1-only drop-in from earlier releases.
+  rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf
+  rmdir /etc/systemd/system/getty@tty1.service.d 2>/dev/null || true
+
+  # In LXC there are two console paths:
+  #   container-getty@1.service -> /dev/tty1  (Proxmox web console/noVNC)
+  #   console-getty.service     -> /dev/console (pct console / serial)
+  if [[ -f "$container_unit" ]]; then
+    rm -f /etc/systemd/system/container-getty@1.service.d/override.conf
+    rmdir /etc/systemd/system/container-getty@1.service.d 2>/dev/null || true
+    mkdir -p /etc/systemd/system/container-getty@.service.d
+    cat > /etc/systemd/system/container-getty@.service.d/override.conf <<EOF
 [Service]
+Environment=TERM=linux
 ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noreset --noclear %I $TERM
+ExecStart=-/sbin/agetty ${agetty_opts} - 115200,38400,9600 linux
 EOF
+  fi
+
+  if [[ -f "$console_unit" ]]; then
+    local console_port="-" console_stdio=""
+    if grep -qs '^StandardInput=null' /run/systemd/system/console-getty.service.d/override.conf 2>/dev/null; then
+      console_port="console"
+      console_stdio=$'StandardInput=null\nStandardOutput=null'
+    fi
+    mkdir -p /etc/systemd/system/console-getty.service.d
+    cat > /etc/systemd/system/console-getty.service.d/override.conf <<EOF
+[Service]
+Environment=TERM=linux
+ExecStart=
+ExecStart=-/sbin/agetty ${agetty_opts} 115200,38400,9600 ${console_port} linux
+${console_stdio}
+EOF
+    systemctl enable console-getty.service >/dev/null 2>&1 || true
+  fi
+
+  # LXC pseudo-terminals often report a 0x0 window size; give readline sane
+  # defaults so it does not leak cursor-position queries into the console.
+  cat > /etc/profile.d/00-lxc-term-size.sh <<'EOF'
+# Added by the Stationeers installer: sane terminal size in the LXC console
+if [ -t 0 ] && [ -t 1 ]; then
+  _sz=$(stty size 2>/dev/null)
+  if [ -z "$_sz" ] || [ "${_sz% *}" = "0" ]; then
+    stty rows 24 cols 80 2>/dev/null
+    export LINES=24 COLUMNS=80
+  fi
+  unset _sz
+fi
+EOF
+  chmod +x /etc/profile.d/00-lxc-term-size.sh
+  touch /root/.hushlogin
+
   systemctl daemon-reload
-  systemctl enable getty@tty1.service >/dev/null 2>&1 || true
-  systemctl restart getty@tty1.service 2>/dev/null || true
+  systemctl reset-failed 'container-getty@*.service' >/dev/null 2>&1 || true
+  local tty
+  for tty in $(tr '\0' '\n' < /proc/1/environ 2>/dev/null | sed -n 's/^container_ttys=//p'); do
+    systemctl restart "container-getty@${tty#pts/}.service" >/dev/null 2>&1 || true
+  done
+  # Proxmox always exposes tty1/tty2; restart them even if container_ttys
+  # was not visible in /proc/1/environ.
+  for tty in 1 2; do
+    systemctl restart "container-getty@${tty}.service" >/dev/null 2>&1 || true
+  done
+  systemctl restart console-getty.service >/dev/null 2>&1 || true
 }
 
 write_motd() {  local ip host

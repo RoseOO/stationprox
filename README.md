@@ -202,15 +202,24 @@ sudo stationeers-install --reset-panel-password
 ## Troubleshooting
 
 **`WARN: Systemd 257 detected. You may need to enable nesting.`** — this is a
-Proxmox LXC start warning on Debian 13. Enable nesting and reboot:
+Proxmox LXC start warning on Debian 13. New containers made by this script set
+`nesting=1`. For an older one:
 
 ```bash
 pct set <CTID> --features nesting=1
 pct reboot <CTID>
 ```
 
-Then check inside the container with `systemctl --failed`. New containers made by
-this script already set `nesting=1`.
+**Console shows a login prompt** — the Proxmox console auto-logs in as root using
+`container-getty@.service` and `console-getty.service` overrides (the same approach
+community-scripts uses), and removes the container root password. Apply it to an
+existing container with:
+
+```bash
+sudo stationeers-update --panel
+```
+
+Then close and reopen the Proxmox console.
 
 **`glibc ... is too old`** — use Debian 13. The installer intentionally refuses
 Debian 12 because the game server will not start.
