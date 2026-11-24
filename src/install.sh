@@ -160,20 +160,35 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   echo "Run with sudo: sudo stationeers-update" >&2
   exit 1
 fi
+
+url="https://raw.githubusercontent.com/RoseOO/stationprox/main/stationeers.sh"
 case "${1:-}" in
-  --panel)
-    exec /usr/local/bin/stationeers-install --update-panel
-    ;;
-  ""|--all)
-    exec /usr/local/bin/stationeers-install --update
+  --panel)  arg="--update-panel" ;;
+  ""|--all) arg="--update" ;;
+  -h|--help)
+    echo "Usage: stationeers-update [--panel]"
+    echo "  (no args)  update SSUI, Stationeers server and panel"
+    echo "  --panel    update only the Control Deck"
+    exit 0
     ;;
   *)
     echo "Usage: stationeers-update [--panel]" >&2
-    echo "  (no args)  update SSUI, Stationeers server and panel" >&2
-    echo "  --panel    update only the Control Deck" >&2
     exit 1
     ;;
 esac
+
+tmp="$(mktemp /tmp/stationeers-update.XXXXXX.sh)"
+trap 'rm -f "$tmp"' EXIT
+
+# Always use the newest installer so panel/importer fixes reach the container.
+if curl -fsSL --retry 2 --connect-timeout 10 "$url" -o "$tmp" && bash -n "$tmp"; then
+  bash "$tmp" "$arg"
+  exit $?
+fi
+
+echo "Could not download the latest installer; using the installed copy." >&2
+rm -f "$tmp"
+exec /usr/local/bin/stationeers-install "$arg"
 EOF
   chmod 755 /usr/local/bin/stationeers-update
 }
