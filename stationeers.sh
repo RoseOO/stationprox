@@ -998,7 +998,11 @@ def import_save_file(src, filename, save_name, overwrite):
 
 def import_archive(src, filename, save_name, overwrite):
     lower = filename.lower()
-    if lower.endswith(".save") or (lower.endswith(".zip") and is_save_file_archive(src)):
+    # Sniff the content, not just the extension: a .save is a zip, and some
+    # browsers/OSes hand it over with a different name.
+    if zipfile.is_zipfile(src) and is_save_file_archive(src):
+        return import_save_file(src, filename, save_name, overwrite)
+    if lower.endswith(".save"):
         return import_save_file(src, filename, save_name, overwrite)
 
     saves_dir = CFG["paths"]["savesDir"]
