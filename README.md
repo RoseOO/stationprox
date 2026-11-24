@@ -116,26 +116,42 @@ browser warning is expected.
 
 ## Load your own saves
 
-A Stationeers save (new terrain system) is a **folder** containing `world.xml`,
-`world_meta.xml` and related files.
+Current Stationeers saves are **`.save` files**. A station on disk looks like:
 
-1. Zip the save folder itself, e.g. `EuropaBase/` → `EuropaBase.zip`
-2. Open the Control Deck → **Saves** → drop the zip on the dropzone
-3. Optionally set a save name and tick **Launch after import**
-4. Press **Load & launch** next to the save
-
-You can also copy a save folder directly into the server and then activate it:
-
-```bash
-# from your PC
-scp -r EuropaBase root@server:/home/stationeers/ssui/saves/
+```
+saves/
+  MyBase/
+    MyBase.save          <- the head save
+    autosave/
+    quicksave/
+    manualsave/
 ```
 
-Then press **Set active** (or **Load & launch**) in the panel. The panel validates
-that `world.xml` exists, prevents path traversal, and refuses to overwrite or rename
-the active save while the server is running.
+The folder name (`MyBase`) is the **Save Name** the server launches with, and it
+must match exactly (capitals and spaces count). Copy the whole station folder, not
+just the inner file.
 
-Download a save any time with **Download** (it is zipped on the fly).
+You can:
+
+1. Drop the `.save` file directly on the Control Deck (it creates
+   `saves/<SaveName>/<SaveName>.save` for you), or
+2. Zip the whole station folder (including its autosave folders) and upload that.
+
+Then press **Load & launch**. The panel now accepts `.save` files and both save
+layouts.
+
+Older saves that only contain `world.xml` are from before the 2025 save-system
+change. The current server cannot load them directly; convert them with the
+Stationeers Save Transformer or load/re-save them in a current client first.
+
+You can also copy a save folder directly into the server:
+
+```bash
+scp -r MyBase root@server:/home/stationeers/ssui/saves/
+```
+
+Then press **Set active** (or **Load & launch**) in the panel. The folder name must
+match the active Save Name exactly.
 
 ### New worlds
 

@@ -371,6 +371,46 @@ def stop_and_wait():
     raise SSUIError(504, "The server did not stop within 120 seconds")
 
 
+SAVE_SUBDIR_NAMES = {
+    "auto",
+    "autosave",
+    "autosaves",
+    "quick",
+    "quicksave",
+    "quicksaves",
+    "manual",
+    "manualsave",
+    "manualsaves",
+    "backup",
+    "backups",
+}
+
+
+def has_station_marker(path):
+    """True if this directory looks like a Stationeers station folder."""
+    if not os.path.isdir(path):
+        return False
+    if os.path.isfile(os.path.join(path, "world.xml")):
+        return True
+    if os.path.isfile(os.path.join(path, "world_meta.xml")):
+        return True
+    try:
+        entries = os.listdir(path)
+    except OSError:
+        return False
+    for entry in entries:
+        full = os.path.join(path, entry)
+        if os.path.isfile(full) and entry.lower().endswith(".save"):
+            return True
+        if os.path.isdir(full) and entry.lower() in SAVE_SUBDIR_NAMES:
+            try:
+                if any(name.lower().endswith(".save") for name in os.listdir(full)):
+                    return True
+            except OSError:
+                pass
+    return False
+
+
 def scan_saves(active):
     saves_dir = CFG["paths"]["savesDir"]
     result = []
@@ -382,17 +422,18 @@ def scan_saves(active):
         path = os.path.join(saves_dir, name)
         if name.startswith(".") or not os.path.isdir(path):
             continue
-        if not (
-            os.path.isfile(os.path.join(path, "world.xml"))
-            or os.path.isfile(os.path.join(path, "world_meta.xml"))
-        ):
+        if not has_station_marker(path):
             continue
         size = 0
         newest = 0
+        has_save = False
+        legacy = True
         try:
             for root, _dirs, files in os.walk(path):
                 for filename in files:
                     fp = os.path.join(root, filename)
+                    if filename.lower().endswith(".save"):
+                        has_save = True
                     try:
                         stat = os.stat(fp)
                         size += stat.st_size
@@ -401,6 +442,7 @@ def scan_saves(active):
                         pass
         except OSError:
             pass
+        legacy = not has_save
         result.append(
             {
                 "name": name,
@@ -408,6 +450,7 @@ def scan_saves(active):
                 "sizeText": human_size(size),
                 "modified": iso_time(newest or os.path.getmtime(path)),
                 "active": name == active,
+                "legacy": legacy,
             }
         )
     return result
@@ -554,74 +597,48 @@ def safe_rel(name):
     return name
 
 
+def is_save_file_archive(src):
+    """A .save file is itself a zip with world.xml/world_meta.xml at its root."""
+    try:
+        with zipfile.ZipFile(src) as archive:
+            names = set(archive.namelist())
+            return "world.xml" in names and "world_meta.xml" in names
+    except Exception:
+        return False
+
+
 def extract_archive(src, filename, target):
     lower = filename.lower()
-    prefix = None
     if lower.endswith(".zip"):
         with zipfile.ZipFile(src) as archive:
-            candidates = []
-            for info in archive.infolist():
-                rel = safe_rel(info.filename)
-                if rel and not info.is_dir() and posixpath.basename(rel) == "world.xml":
-                    candidates.append(rel)
-            if not candidates:
-                raise ApiError(
-                    400,
-                    "That archive has no world.xml. Zip the save folder that contains "
-                    "world.xml and world_meta.xml (not just the game's .save file).",
-                )
-            candidates.sort(key=lambda p: (p.count("/"), len(p)))
-            prefix = posixpath.dirname(candidates[0])
             for info in archive.infolist():
                 rel = safe_rel(info.filename)
                 if rel is None:
                     continue
-                if prefix and not (rel == prefix or rel.startswith(prefix + "/")):
-                    continue
-                inner = rel[len(prefix):].lstrip("/") if prefix else rel
-                if not inner:
-                    continue
-                dest = os.path.join(target, inner)
+                dest = os.path.join(target, rel)
                 if not inside(target, dest):
                     continue
                 if info.is_dir():
                     os.makedirs(dest, exist_ok=True)
                     continue
                 if info.file_size > 2 * 1024 * 1024 * 1024:
-                    raise ApiError(400, "Archive member is too large: %s" % inner)
+                    raise ApiError(400, "Archive member is too large: %s" % rel)
                 os.makedirs(os.path.dirname(dest) or target, exist_ok=True)
                 with archive.open(info) as fsrc, open(dest, "wb") as fdst:
                     shutil.copyfileobj(fsrc, fdst, 1024 * 1024)
     elif lower.endswith((".tar.gz", ".tgz", ".tar")):
         with tarfile.open(src, "r:*") as archive:
-            file_members = [m for m in archive.getmembers() if m.isfile()]
-            candidates = []
-            for member in file_members:
-                rel = safe_rel(member.name)
-                if rel and posixpath.basename(rel) == "world.xml":
-                    candidates.append(rel)
-            if not candidates:
-                raise ApiError(
-                    400,
-                    "That archive has no world.xml. Zip the save folder that contains "
-                    "world.xml and world_meta.xml.",
-                )
-            candidates.sort(key=lambda p: (p.count("/"), len(p)))
-            prefix = posixpath.dirname(candidates[0])
-            for member in file_members:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
                 rel = safe_rel(member.name)
                 if rel is None:
                     continue
-                if prefix and not (rel == prefix or rel.startswith(prefix + "/")):
-                    continue
-                inner = rel[len(prefix):].lstrip("/") if prefix else rel
-                if not inner:
-                    continue
-                dest = os.path.join(target, inner)
+                dest = os.path.join(target, rel)
                 if not inside(target, dest):
                     continue
                 if member.size > 2 * 1024 * 1024 * 1024:
-                    raise ApiError(400, "Archive member is too large: %s" % inner)
+                    raise ApiError(400, "Archive member is too large: %s" % rel)
                 os.makedirs(os.path.dirname(dest) or target, exist_ok=True)
                 fsrc = archive.extractfile(member)
                 if fsrc is None:
@@ -631,14 +648,75 @@ def extract_archive(src, filename, target):
     else:
         raise ApiError(
             400,
-            "Upload a .zip (or .tar.gz) of the save folder. A Stationeers save is a "
-            "folder containing world.xml and world_meta.xml.",
+            "Upload the station's .save file, or a .zip/.tar.gz of the whole "
+            "station folder (containing <name>.save and/or world.xml).",
         )
-    if not os.path.isfile(os.path.join(target, "world.xml")):
-        raise ApiError(400, "Import failed: world.xml was not found after extraction")
+
+
+def find_station_root(staging):
+    """Find the folder that represents one station inside an extracted archive."""
+    entries = [
+        entry
+        for entry in os.listdir(staging)
+        if entry not in ("__MACOSX", ".DS_Store")
+    ]
+    dirs = [entry for entry in entries if os.path.isdir(os.path.join(staging, entry))]
+    files = [entry for entry in entries if os.path.isfile(os.path.join(staging, entry))]
+
+    if has_station_marker(staging) and (files or not dirs):
+        return staging
+
+    candidates = [
+        os.path.join(staging, entry)
+        for entry in dirs
+        if has_station_marker(os.path.join(staging, entry))
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        raise ApiError(
+            400,
+            "That archive contains more than one Stationeers save. Upload one "
+            "station folder or one .save file at a time.",
+        )
+    if len(dirs) == 1 and not files:
+        return os.path.join(staging, dirs[0])
+    return None
+
+
+def import_save_file(src, filename, save_name, overwrite):
+    saves_dir = CFG["paths"]["savesDir"]
+    os.makedirs(saves_dir, exist_ok=True)
+    if not zipfile.is_zipfile(src):
+        raise ApiError(
+            400,
+            "That .save file is not a valid Stationeers save (a .save is a zip archive).",
+        )
+    target_name = clean_save_name(save_name or filename)
+    target = os.path.join(saves_dir, target_name)
+    if not inside(saves_dir, target):
+        raise ApiError(400, "Invalid save name")
+    if os.path.exists(target) and not overwrite:
+        raise ApiError(409, 'Save "%s" already exists. Enable overwrite to replace it.' % target_name)
+    staging = tempfile.mkdtemp(prefix=".import-", dir=saves_dir)
+    try:
+        folder = os.path.join(staging, target_name)
+        os.makedirs(folder)
+        shutil.copyfile(src, os.path.join(folder, target_name + ".save"))
+        if os.path.exists(target):
+            shutil.rmtree(target)
+        shutil.move(folder, target)
+        os.chmod(target, 0o775)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return target_name
 
 
 def import_archive(src, filename, save_name, overwrite):
+    lower = filename.lower()
+    if lower.endswith(".save") or (lower.endswith(".zip") and is_save_file_archive(src)):
+        return import_save_file(src, filename, save_name, overwrite)
+
     saves_dir = CFG["paths"]["savesDir"]
     os.makedirs(saves_dir, exist_ok=True)
     target_name = clean_save_name(save_name or filename)
@@ -649,12 +727,19 @@ def import_archive(src, filename, save_name, overwrite):
         raise ApiError(409, 'Save "%s" already exists. Enable overwrite to replace it.' % target_name)
     staging = tempfile.mkdtemp(prefix=".import-", dir=saves_dir)
     try:
-        extracted = os.path.join(staging, target_name)
-        os.makedirs(extracted)
-        extract_archive(src, filename, extracted)
+        raw = os.path.join(staging, "raw")
+        os.makedirs(raw)
+        extract_archive(src, filename, raw)
+        root = find_station_root(raw)
+        if root is None:
+            raise ApiError(
+                400,
+                "No Stationeers save found in that archive. It must contain a "
+                ".save file or world.xml for one station.",
+            )
         if os.path.exists(target):
             shutil.rmtree(target)
-        shutil.move(extracted, target)
+        shutil.move(root, target)
         os.chmod(target, 0o775)
     finally:
         shutil.rmtree(staging, ignore_errors=True)

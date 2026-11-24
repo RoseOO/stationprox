@@ -269,6 +269,43 @@ def main():
         assert second.status == 200, (second.status, second_body)
         conn.close()
 
+        # New-format upload: a .save file placed as <Station>/<Station>.save
+        new_save = os.path.join(tmp, "NewStyle.save")
+        with zipfile.ZipFile(new_save, "w") as zf:
+            zf.writestr("world.xml", "<World/>")
+            zf.writestr("world_meta.xml", "<Meta/>")
+            zf.writestr("terrain.dat", b"\0" * 16)
+        status, body, _ = request(
+            "POST", base + "/api/saves/upload?name=NewStyle",
+            data=open(new_save, "rb").read(),
+            headers=dict(headers, **{"X-Filename": "NewStyle.save"}),
+        )
+        assert status == 200, (status, body)
+        assert os.path.isfile(os.path.join(saves_dir, "NewStyle", "NewStyle.save"))
+
+        # Zip of a whole station folder (new layout, .save plus autosaves)
+        folder_zip = os.path.join(tmp, "FolderSave.zip")
+        with zipfile.ZipFile(folder_zip, "w") as zf:
+            zf.writestr("FolderSave/FolderSave.save", b"PK-dummy")
+            zf.writestr("FolderSave/autosave/240126_120000_auto.save", b"PK-dummy2")
+            zf.writestr("FolderSave/world_meta.xml", "<Meta/>")
+        status, body, _ = request(
+            "POST", base + "/api/saves/upload?name=FolderSave",
+            data=open(folder_zip, "rb").read(),
+            headers=dict(headers, **{"X-Filename": "FolderSave.zip"}),
+        )
+        assert status == 200, (status, body)
+        assert os.path.isfile(os.path.join(saves_dir, "FolderSave", "FolderSave.save"))
+        assert os.path.isfile(
+            os.path.join(saves_dir, "FolderSave", "autosave", "240126_120000_auto.save")
+        )
+
+        status, body, _ = request("GET", base + "/api/state", headers=headers)
+        assert status == 200
+        listed = {save["name"]: save for save in json.loads(body)["saves"]}
+        assert listed["NewStyle"]["legacy"] is False, listed
+        assert listed["FolderSave"]["legacy"] is False, listed
+
         status, body, _ = request("GET", base + "/api/saves/EuropaBase/download", headers=headers)
         assert status == 200 and body.startswith(b"PK"), (status, body[:20])
         with zipfile.ZipFile(__import__("io").BytesIO(body)) as zf:

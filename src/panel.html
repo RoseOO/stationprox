@@ -256,11 +256,12 @@
     <section class="card wide">
       <h2>Saves <span class="right" id="saveCount"></span></h2>
       <div class="dropzone" id="dropzone">
-        <strong>Drop a save archive here</strong> or use the file picker. A save is a folder containing
-        <span class="mono">world.xml</span> and <span class="mono">world_meta.xml</span> &mdash; zip that folder.
+        <strong>Drop a .save file or a station-folder zip here</strong> or use the file picker.
+        A current save is <span class="mono">&lt;StationName&gt;/&lt;StationName&gt;.save</span>;
+        zip the whole station folder if you want its autosaves too.
       </div>
       <div class="upload-row">
-        <input type="file" id="fileInput" accept=".zip,.tar,.tar.gz,.tgz">
+        <input type="file" id="fileInput" accept=".save,.zip,.tar,.tar.gz,.tgz">
         <input type="text" id="uploadName" placeholder="Save name (optional)" style="max-width:220px" autocomplete="off">
         <label class="check" style="margin:0"><input type="checkbox" id="overwrite"> Overwrite</label>
         <label class="check" style="margin:0"><input type="checkbox" id="uploadLaunch"> Launch after import</label>
@@ -474,7 +475,7 @@
       actions += '<button class="tiny" data-action="rename" data-name="' + esc(save.name) + '">Rename</button>';
       actions += '<button class="tiny danger" data-action="delete" data-name="' + esc(save.name) + '">Delete</button>';
       return "<tr>" +
-        '<td class="name-cell">' + esc(save.name) + (save.active ? ' <span class="badge active">active</span>' : "") + "</td>" +
+        '<td class="name-cell">' + esc(save.name) + (save.active ? ' <span class="badge active">active</span>' : "") + (save.legacy ? ' <span class="badge">legacy</span>' : "") + "</td>" +
         "<td>" + esc(save.sizeText) + "</td>" +
         "<td class=\"muted\">" + esc(save.modified) + "</td>" +
         '<td><div class="row-actions">' + actions + "</div></td>" +
