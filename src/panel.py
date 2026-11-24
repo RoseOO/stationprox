@@ -609,7 +609,7 @@ def is_save_file_archive(src):
 
 def extract_archive(src, filename, target):
     lower = filename.lower()
-    if lower.endswith(".zip"):
+    if zipfile.is_zipfile(src):
         with zipfile.ZipFile(src) as archive:
             for info in archive.infolist():
                 rel = safe_rel(info.filename)
@@ -688,9 +688,25 @@ def import_save_file(src, filename, save_name, overwrite):
     saves_dir = CFG["paths"]["savesDir"]
     os.makedirs(saves_dir, exist_ok=True)
     if not zipfile.is_zipfile(src):
+        try:
+            size = os.path.getsize(src)
+            with open(src, "rb") as fh:
+                magic = fh.read(4).hex() or "empty"
+        except OSError:
+            size = -1
+            magic = "unreadable"
         raise ApiError(
             400,
-            "That .save file is not a valid Stationeers save (a .save is a zip archive).",
+            "That .save file is not a zip archive (size %s bytes, starts with %s). "
+            "A Stationeers .save is a zip; re-upload it and make sure the transfer "
+            "was not truncated." % (size, magic),
+        )
+    if not is_save_file_archive(src):
+        raise ApiError(
+            400,
+            "That zip is missing world.xml/world_meta.xml at its root, so it is not "
+            "a Stationeers .save. If it is a zip of the station folder, upload it as "
+            "a .zip so it can be unpacked.",
         )
     target_name = clean_save_name(save_name or filename)
     target = os.path.join(saves_dir, target_name)
@@ -716,9 +732,11 @@ def import_archive(src, filename, save_name, overwrite):
     lower = filename.lower()
     # Sniff the content, not just the extension: a .save is a zip, and some
     # browsers/OSes hand it over with a different name.
-    if zipfile.is_zipfile(src) and is_save_file_archive(src):
-        return import_save_file(src, filename, save_name, overwrite)
-    if lower.endswith(".save"):
+    if zipfile.is_zipfile(src):
+        if is_save_file_archive(src):
+            return import_save_file(src, filename, save_name, overwrite)
+        # A zip of a station folder (even if it was named .save) falls through.
+    elif lower.endswith(".save"):
         return import_save_file(src, filename, save_name, overwrite)
 
     saves_dir = CFG["paths"]["savesDir"]
